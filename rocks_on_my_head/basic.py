@@ -11,10 +11,10 @@ WIDTH, HEIGHT= 1000, 600 # the dimensions of the window in pixels
 WIN = pygame.display.set_mode((WIDTH, HEIGHT)) # creating the window
 
 #caption for the window - this will be the name at the top of the window
-pygame.display.set_caption(" Rocks on My Head ") # setting the caption for the window
+pygame.display.set_caption(" Rocks on My Head -BASIC ") # setting the caption for the window
 
 #setting a background image
-BG= pygame.transform.scale(pygame.image.load("images/green_background.jpg"), (WIDTH, HEIGHT)) # transforming scale of background to fit the window size
+BG= pygame.transform.scale(pygame.image.load("rocks_on_my_head/images/green_background.jpg"), (WIDTH, HEIGHT)) # transforming scale of background to fit the window size
 
 #Player attributes
 PLAYER_WIDTH, PLAYER_HEIGHT= 50, 50 # dimensions of the player in pixels
