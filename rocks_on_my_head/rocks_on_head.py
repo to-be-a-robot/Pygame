@@ -23,13 +23,13 @@ def load_image_no_bg(path, size, tolerance=30):  #loads a jpg and makes its back
 #---------- WINDOW & BACKGROUND -----------
 # creating a window
 WIDTH, HEIGHT= 1000, 600 # the dimensions of the window in pixels
-WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE) # creating the window, RESIZABLE lets the player drag the corners to expand it
+WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE) # creating the window, RESIZABLE 
 
 #caption for the window - this will be the name at the top of the window
 pygame.display.set_caption(" Rocks on My Head")
 
 #setting a background image
-BG_ORIGINAL = pygame.image.load(os.path.join(IMAGES_DIR,'space_blue.jpg')).convert()  #keep the unscaled image so it can be rescaled cleanly for any window size
+BG_ORIGINAL = pygame.image.load(os.path.join(IMAGES_DIR,'space_blue.jpg')).convert() 
 BG= pygame.transform.scale(BG_ORIGINAL, (WIDTH, HEIGHT))
 
 FULLSCREEN = False
@@ -147,7 +147,7 @@ def main():
                     projectile= pygame.Rect(projectile_x, -PROJECTILE_HEIGHT, PROJECTILE_WIDTH, PROJECTILE_HEIGHT)  #new projectile 
                     projectiles.append(projectile)  
 
-                proj_add_increment = max(400, proj_add_increment - 50) #make the game more challenging over time
+                proj_add_increment = max(600, proj_add_increment - 50) #make the game more challenging over time
                 proj_count = 0  
 
             #key presses
