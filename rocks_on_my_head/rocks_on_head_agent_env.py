@@ -72,6 +72,31 @@ class AsteroidGame:
         # playable version, and is only used to render a human-readable survival time
         self.TICK_DURATION_MS = 50
 
+        # small penalty for reversing direction frame-to-frame (LEFT<->RIGHT), so a
+        # greedy policy doesn't chatter/vibrate on frames where both directions have
+        # near-tied Q-values
+        self.SWITCH_COST = 0.2
+
+        # small penalty for choosing LEFT/RIGHT when already clamped at that wall
+        # (the action produces no actual movement) - directly discourages "camp at
+        # the boundary and keep pressing into it" without touching the reward scale
+        # the way a per-frame danger penalty does
+        self.WALL_NOOP_COST = 0.3
+
+        # reward shaping: penalize sitting in an asteroid's column as it approaches,
+        # not just the collision itself, so the agent has a direct incentive to dodge
+        # instead of relying on exploration to discover it. Safe to use now that the
+        # spawn range no longer makes walls artificially safer (see step()/reset()).
+        #
+        # Implemented as potential-based shaping (Ng, Harada & Russell 1999):
+        # F(s,a,s') = gamma * Phi(s') - Phi(s), with Phi(s) = -DANGER_WEIGHT * danger(s).
+        # This form is the only one guaranteed not to change the optimal policy versus
+        # the unshaped reward - it only changes how fast the agent finds it. GAMMA here
+        # must match DQNAgent's gamma for that guarantee to hold.
+        self.DANGER_HALF_WIDTH_MARGIN = 1.3
+        self.DANGER_WEIGHT = 0.5
+        self.GAMMA = 0.99
+
         self.done = True  # nothing has been reset() yet
 
 
@@ -90,6 +115,7 @@ class AsteroidGame:
         self.frame_count = 0
         self.survival_frames = 0
         self.done = False
+        self.last_action = self.ACTION_NONE
 
         return self.get_state()
 
@@ -98,11 +124,18 @@ class AsteroidGame:
         if self.done:
             raise RuntimeError("step() called after episode ended - call reset() first")
 
+        # potential of the state as observed (before this frame's action/motion) -
+        # for the potential-based danger shaping below
+        danger_potential_before = -self.DANGER_WEIGHT * self._danger_score()
+
         # Apply Action
+        prev_x = self.player.x
         if action == self.ACTION_LEFT and self.player.x - self.PLAYER_VELOCITY >= 0:
             self.player.x -= self.PLAYER_VELOCITY
         elif action == self.ACTION_RIGHT:
             self.player.x = min(self.player.x + self.PLAYER_VELOCITY, self.WIN_WIDTH - self.player.width)
+
+        wall_noop = action in (self.ACTION_LEFT, self.ACTION_RIGHT) and self.player.x == prev_x
 
         # Advance frame counters
         self.frame_count += 1
@@ -112,7 +145,12 @@ class AsteroidGame:
         if self.proj_count >= self.proj_add_increment:
 
             for _ in range(2):
-                projectile_x = random.randint(0, self.WIN_WIDTH - self.PROJECTILE_WIDTH)
+                # spawn range is widened by PROJECTILE_WIDTH on each side (asteroids can
+                # spawn partly off-screen) so that the ship's collision-overlap window is
+                # never truncated near the left/right walls - otherwise hugging a wall
+                # is artificially safer than staying mid-screen, which is an exploit an
+                # RL agent will reliably find
+                projectile_x = random.randint(-self.PROJECTILE_WIDTH, self.WIN_WIDTH)
                 projectile = pygame.Rect(projectile_x, -self.PROJECTILE_HEIGHT, self.PROJECTILE_WIDTH, self.PROJECTILE_HEIGHT)
                 self.projectiles.append(projectile)
 
@@ -138,14 +176,50 @@ class AsteroidGame:
             reward = -100
             self.done = True
         else:
-            reward = 1
+            # potential-based shaping term: gamma*Phi(s') - Phi(s). Terminal states are
+            # implicitly Phi=0 (we only take this branch when not done), which is the
+            # convention required for the policy-invariance guarantee to hold.
+            danger_potential_after = -self.DANGER_WEIGHT * self._danger_score()
+            shaping = self.GAMMA * danger_potential_after - danger_potential_before
+
+            reward = 1 + shaping
+            if action != self.last_action and self.ACTION_NONE not in (action, self.last_action):
+                reward -= self.SWITCH_COST
+            if wall_noop:
+                reward -= self.WALL_NOOP_COST
             self.survival_frames += 1
+
+        self.last_action = action
 
         state = self.get_state()
         info= {"survived_frames": self.survival_frames}
         return state, reward, self.done, info
 
+    def _danger_score(self):
+        # highest "about to be hit" risk across all live asteroids, in [0, 1).
+        # An asteroid contributes risk once it's within a horizontal danger corridor
+        # of the player, scaled up as it gets both more horizontally aligned and
+        # vertically closer - so standing still in an incoming asteroid's column
+        # costs more the longer the agent waits to dodge.
+        half_width_sum = (self.PLAYER_WIDTH + self.PROJECTILE_WIDTH) / 2
+        danger_corridor = half_width_sum * self.DANGER_HALF_WIDTH_MARGIN
 
+        danger = 0.0
+        for projectile in self.projectiles:
+            horiz_gap = abs((projectile.x + self.PROJECTILE_WIDTH / 2) -
+                             (self.player.x + self.PLAYER_WIDTH / 2))
+            if horiz_gap >= danger_corridor:
+                continue
+
+            vertical_gap = self.player.y - (projectile.y + self.PROJECTILE_HEIGHT)
+            if vertical_gap <= 0:
+                continue
+
+            alignment = 1.0 - (horiz_gap / danger_corridor)
+            proximity = 1.0 - min(vertical_gap / self.WIN_HEIGHT, 1.0)
+            danger = max(danger, alignment * proximity)
+
+        return danger
 
     def get_state(self):
         # package ship position + N nearest asteroid positions into a  fixed numpy state array

@@ -116,7 +116,10 @@ def main():
     global WIN
     run = True
 
-    player =pygame.Rect(WIDTH//2 - PLAYER_WIDTH//2, HEIGHT - PLAYER_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT) #spacecraft at the bottom middle 
+    player =pygame.Rect(WIDTH//2 - PLAYER_WIDTH//2, 
+                        HEIGHT - PLAYER_HEIGHT, 
+                        PLAYER_WIDTH, 
+                        PLAYER_HEIGHT) #spacecraft at the bottom middle 
 
     clock= pygame.time.Clock() 
 
